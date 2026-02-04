@@ -52,6 +52,7 @@ for dir in ex*; do
         
         if [ $? -eq 0 ]; then
             ./a.out Donut Honeycomb Ice_Cream_Sandwich Eclair Cupcake Froyo | cat -e
+            rm a.out
         else
             echo "!!! 컴파일 에러 발생 !!!"
             rm main.c
