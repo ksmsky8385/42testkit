@@ -44,14 +44,14 @@ for dir in ex*; do
         # --- [Step 5] 컴파일 및 실행 ---
         echo ""
         echo "[실행 결과]"
-        echo "%>./a.out Donut Honeycomb Ice_Cream_Sandwich Eclair Cupcake Froyo | cat -e"
+        echo "%>./a.out Donut Honeycomb Donut Gingerbread Eclair Cupcake Froyo | cat -e"
 
         # 해당 폴더로 이동해서 컴파일 후 다시 복귀
         cd "$dir"
         cc -Wall -Wextra -Werror *.c
         
         if [ $? -eq 0 ]; then
-            ./a.out Donut Honeycomb Ice_Cream_Sandwich Eclair Cupcake Froyo | cat -e
+            ./a.out Donut Honeycomb Donut Gingerbread Eclair Cupcake Froyo | cat -e
             rm a.out
         else
             echo "!!! 컴파일 에러 발생 !!!"
