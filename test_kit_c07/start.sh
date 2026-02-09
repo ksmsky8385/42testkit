@@ -1,18 +1,14 @@
 #!/bin/bash
 
 # [경로 설정]
-# 스크립트가 있는 위치(test_kit 폴더)를 알아냅니다.
 KIT_DIR=$(dirname "$0")
-# mains 폴더는 스크립트와 같은 위치(test_kit/mains)에 있다고 가정합니다.
 MAINS_DIR="$KIT_DIR/mains"
 
-# mains 폴더가 없으면 경고 (경로 확인용)
 if [ ! -d "$MAINS_DIR" ]; then
     echo "Error: '$MAINS_DIR' 경로에 mains 폴더가 없습니다."
     exit 1
 fi
 
-# 현재 위치(과제 루트)에 있는 ex00, ex01 ... 폴더를 순회
 for dir in ex*; do
     if [ -d "$dir" ]; then
         echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
@@ -22,27 +18,31 @@ for dir in ex*; do
         # 1. 문항 번호 추출
         NUM=${dir:2}
         
-        # 2. 해당 문항의 풀이 파일(.c) 찾기 (main.c 제외)
-        SRC_FILE=$(find "$dir" -maxdepth 1 -name "*.c" ! -name "main.c" | head -n 1)
+        # 2. 해당 문항의 풀이 파일들(.c) 찾기 (main.c 제외, head -n 1 제거함)
+        SRC_FILES=$(find "$dir" -maxdepth 1 -name "*.c" ! -name "main.c")
         
-        if [ -z "$SRC_FILE" ]; then
+        # 파일이 하나도 없으면 스킵
+        if [ -z "$SRC_FILES" ]; then
             echo "[$dir] 풀이 파일(.c)이 없습니다."
             continue
         fi
 
-        # 3. 파일 이름에서 함수명 추측
-        FILENAME=$(basename "$SRC_FILE")
-        
         # --- [Step 1] 헤더 출력 ---
-        echo ">>> 문제 번호: $dir - 대상 파일: $FILENAME"
+        # 여러 파일일 수 있으므로 줄바꿈으로 구분해서 보여줌
+        echo ">>> 문제 번호: $dir"
+        echo ">>> 대상 파일 목록:"
+        # 파일 경로에서 파일명만 예쁘게 잘라내서 보여주기
+        for f in $SRC_FILES; do
+            echo "    - $(basename "$f")"
+        done
 
         # --- [Step 2] Norminette 검사 ---
         echo ""
         echo "[Norminette 검사]"
-        norminette "$SRC_FILE"
+        # SRC_FILES에 여러 파일 경로가 들어있으므로 한 번에 검사 가능
+        norminette $SRC_FILES
 
         # --- [Step 3] 메인 코드 복사 및 준비 ---
-        # test_kit/mains/ex00_main.c 를 찾음
         MAIN_SRC="$MAINS_DIR/${dir}_main.c"
         
         if [ -f "$MAIN_SRC" ]; then
@@ -54,10 +54,16 @@ for dir in ex*; do
 
         # --- [Step 4] 소스 코드 & 메인 코드 내용 출력 ---
         echo ""
-        echo "[풀이 함수 코드 ($FILENAME)]"
-        cat "$SRC_FILE"
+        echo "[제출한 코드 내용]"
         
-        echo ""
+        # 발견된 모든 파일을 순회하며 출력
+        for file in $SRC_FILES; do
+            FILENAME=$(basename "$file")
+            echo "--- $FILENAME ---"
+            cat "$file"
+            echo "" # 파일 간 구분을 위한 공백
+        done
+        
         echo "[테스트용 메인 코드 (${dir}_main.c)]"
         cat "$dir/main.c"
         
@@ -65,13 +71,13 @@ for dir in ex*; do
         echo ""
         echo "[실행 결과]"
 
-        # 해당 폴더로 이동해서 컴파일 후 다시 복귀
         cd "$dir"
+        # *.c 는 폴더 내의 모든 c파일(제출한 여러 파일 + main.c)을 다 포함합니다.
         cc -Wall -Wextra -Werror *.c -o test_out
         
         if [ $? -eq 0 ]; then
-            valgrind -q --leak-check=full ./test_out # 메모리 누수 체크 하며 실행
-            rm test_out main.c  # 실행 후 청소
+            valgrind -q --leak-check=full ./test_out
+            rm test_out main.c
         else
             echo "!!! 컴파일 에러 발생 !!!"
             rm main.c
