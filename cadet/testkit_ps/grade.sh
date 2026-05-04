@@ -2,9 +2,7 @@
 
 STRATEGY="--complex"
 RUNS=100
-
 SIZES=(100 500)
-
 LOG_DIR="grade_log"
 
 get_next_index() {
@@ -25,11 +23,14 @@ get_next_index() {
 echo "============ Check Grade ============"
 echo "-------------------------------------"
 CURRENT_FAIL_LOGS=()
+MAX_OPS_100=0
+MAX_OPS_500=0
 
 for N in "${SIZES[@]}"
 do
     total_ops=0
     fail_count=0
+    max_ops=0
     next_idx=$(get_next_index "$N")
     
     [ $N -eq 100 ] && THRESHOLD=700 || THRESHOLD=5500
@@ -42,6 +43,9 @@ do
         ops=$(./push_swap $STRATEGY $ARGS | wc -l)
         
         total_ops=$((total_ops + ops))
+        if [ $ops -gt $max_ops ]; then
+            max_ops=$ops
+        fi
 
         if [ $ops -gt $THRESHOLD ]; then
             if [ ! -d "$LOG_DIR" ]; then
@@ -57,6 +61,8 @@ do
         
         printf "\rProgress: %d/%d" "$i" "$RUNS"
     done
+
+    [ $N -eq 100 ] && MAX_OPS_100=$max_ops || MAX_OPS_500=$max_ops
 
     avg_ops=$(echo "scale=2; $total_ops / $RUNS" | bc -l)
     fail_rate=$(echo "scale=2; ($fail_count / $RUNS) * 100" | bc -l)
@@ -78,4 +84,6 @@ if [ ${#CURRENT_FAIL_LOGS[@]} -gt 0 ]; then
     echo "-------------------------------------"
 else
     echo -e "\nNo new fail cases in this run. Perfect!"
+    echo "  > Max Ops (100) : $MAX_OPS_100"
+    echo "  > Max Ops (500) : $MAX_OPS_500"
 fi
