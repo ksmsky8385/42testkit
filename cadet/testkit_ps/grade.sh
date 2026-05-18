@@ -1,7 +1,7 @@
 #!/bin/bash
 
-STRATEGY="--complex"
-RUNS=100
+STRATEGY="--medium"
+RUNS=1000
 SIZES=(100 500)
 LOG_DIR="grade_log"
 
@@ -12,7 +12,7 @@ get_next_index() {
         return
     fi
     local last_idx=$(ls "$LOG_DIR" 2>/dev/null | grep "fail_${size}_case" | sed -E "s/fail_${size}_case([0-9]+).txt/\1/" | sort -n | tail -1)
-    
+
     if [ -z "$last_idx" ]; then
         echo 1
     else
@@ -32,7 +32,7 @@ do
     fail_count=0
     max_ops=0
     next_idx=$(get_next_index "$N")
-    
+
     [ $N -eq 100 ] && THRESHOLD=700 || THRESHOLD=5500
 
     echo "[N = $N] Target Threshold: $THRESHOLD"
@@ -41,7 +41,7 @@ do
     do
         ARGS=$(shuf -i 0-10000 -n $N | tr '\n' ' ')
         ops=$(./push_swap $STRATEGY $ARGS | wc -l)
-        
+
         total_ops=$((total_ops + ops))
         if [ $ops -gt $max_ops ]; then
             max_ops=$ops
@@ -54,11 +54,11 @@ do
             FILE_NAME="${LOG_DIR}/fail_${N}_case${next_idx}.txt"
             echo "$ARGS" > "$FILE_NAME"
             CURRENT_FAIL_LOGS+=("$FILE_NAME")
-            
+
             fail_count=$((fail_count + 1))
             next_idx=$((next_idx + 1))
         fi
-        
+
         printf "\rProgress: %d/%d" "$i" "$RUNS"
     done
 
@@ -74,7 +74,7 @@ done
 
 if [ ${#CURRENT_FAIL_LOGS[@]} -gt 0 ]; then
     echo -e "\nAnalyzing NEW Fail Cases (${#CURRENT_FAIL_LOGS[@]}) with --bench:"
-    
+
     for fail_file in "${CURRENT_FAIL_LOGS[@]}"
     do
         echo "-------------------------------------"

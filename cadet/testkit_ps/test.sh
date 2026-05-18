@@ -1,41 +1,62 @@
 #!/bin/bash
 
-# ARGS=" 9 8 7 6 5 4 3 2 1 0"
-# ARGS=$(seq 500 -1 1 | tr '\n' ' ')
-ARGS=$(shuf -i 0-9999 -n 500 | tr '\n' ' ')
-
 STRATEGY="--medium"
-
 CHECKER="checker_linux"
 
-TMP_INS=$(mktemp)
-TMP_BENCH=$(mktemp)
+LIMITS_100=(700 1500 2000)
+LIMITS_500=(5500 8000 12000)
 
-valgrind -q --leak-check=full --show-leak-kinds=all \
-    ./push_swap --bench $STRATEGY $ARGS \
-    1> "$TMP_INS" 2> "$TMP_BENCH"
+for N in 100 500
+do
+    ARGS=$(shuf -i 0-9999 -n $N | tr '\n' ' ')
+    TMP_INS=$(mktemp)
+    TMP_BENCH=$(mktemp)
 
-echo "=== Bench (stderr) ==="
+    valgrind -q --leak-check=full --show-leak-kinds=all \
+        ./push_swap --bench $STRATEGY $ARGS \
+        1> "$TMP_INS" 2> "$TMP_BENCH"
 
-cat "$TMP_BENCH"
-echo "----------------------"
+    echo "=== N=$N Bench (stderr) ==="
+    cat "$TMP_BENCH"
+    echo "----------------------"
 
-echo -n "$CHECKER Result : "
-valgrind -q --leak-check=full --show-leak-kinds=all \
-    ./$CHECKER $ARGS < "$TMP_INS"
+    echo -n "$CHECKER Result : "
+    valgrind -q --leak-check=full --show-leak-kinds=all \
+        ./$CHECKER $ARGS < "$TMP_INS"
 
-LINE_COUNT=$(grep -v '^$' "$TMP_INS" | wc -l)
+    LINE_COUNT=$(grep -v '^$' "$TMP_INS" | wc -l)
 
-if [ "$LINE_COUNT" -lt 5500 ]; then
-    PERF="Excellent"
-elif [ "$LINE_COUNT" -lt 8000 ]; then
-    PERF="Good"
-elif [ "$LINE_COUNT" -lt 12000 ]; then
-    PERF="Pass"
-else
-    PERF="Too many ops"
-fi
+    if [ "$N" -eq 100 ]; then
+        if [ "$LINE_COUNT" -lt "${LIMITS_100[0]}" ]; then
+            PERF="Excellent"
+            TARGET="Less than ${LIMITS_100[0]}"
+        elif [ "$LINE_COUNT" -lt "${LIMITS_100[1]}" ]; then
+            PERF="Good"
+            TARGET="Less than ${LIMITS_100[1]}"
+        elif [ "$LINE_COUNT" -lt "${LIMITS_100[2]}" ]; then
+            PERF="Pass"
+            TARGET="Less than ${LIMITS_100[2]}"
+        else
+            PERF="Too many ops"
+            TARGET="Over ${LIMITS_100[2]}"
+        fi
+    elif [ "$N" -eq 500 ]; then
+        if [ "$LINE_COUNT" -lt "${LIMITS_500[0]}" ]; then
+            PERF="Excellent"
+            TARGET="Less than ${LIMITS_500[0]}"
+        elif [ "$LINE_COUNT" -lt "${LIMITS_500[1]}" ]; then
+            PERF="Good"
+            TARGET="Less than ${LIMITS_500[1]}"
+        elif [ "$LINE_COUNT" -lt "${LIMITS_500[2]}" ]; then
+            PERF="Pass"
+            TARGET="Less than ${LIMITS_500[2]}"
+        else
+            PERF="Too many ops"
+            TARGET="Over ${LIMITS_500[2]}"
+        fi
+    fi
 
-echo "Performance : $PERF"
-
-rm -f "$TMP_INS" "$TMP_BENCH"
+    echo "Performance (N=$N) : $PERF ($TARGET) ($LINE_COUNT ops)"
+    echo
+    rm -f "$TMP_INS" "$TMP_BENCH"
+done

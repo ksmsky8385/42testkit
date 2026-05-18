@@ -1,7 +1,7 @@
 #!/bin/bash
 
 MAX_N=1000
-STEP=15
+STEP=10
 RUNS=1
 STRATEGIES=("simple" "medium" "complex")
 

@@ -2,7 +2,7 @@
 
 NUMBERS=500
 STRATEGY="--medium"
-CHECKER="checker_linux"
+CHECKER="checker"
 RUNS=100
 
 LOG_DIR="run_log"
