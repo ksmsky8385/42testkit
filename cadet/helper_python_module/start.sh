@@ -301,7 +301,7 @@ ensure_tool_or_choose() {
   local package="$2"
   local answer
 
-  if command -v "$tool" >/dev/null 2>&1; then
+  if command -v "$tool" >/dev/null 2>&1 && "$tool" --version >/dev/null 2>&1; then
     return 0
   fi
 
