@@ -8,6 +8,28 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 REGISTERED_MODULES=("00" "01" "02" "03" "04" "05" "06" "07" "08" "09" "10")
 
 # ==============================
+# 출력 색상 / 태그 설정
+# ==============================
+
+printf -v RED '\033[1;31m'
+printf -v GREEN '\033[1;32m'
+printf -v YELLOW '\033[1;33m'
+printf -v BLUE '\033[1;34m'
+printf -v CYAN '\033[1;36m'
+printf -v RESET '\033[0m'
+
+TAG_RUN="${YELLOW}[RUN]${RESET}"
+TAG_INFO="${CYAN}[INFO]${RESET}"
+TAG_DONE="${GREEN}[DONE]${RESET}"
+TAG_WARN="${YELLOW}[WARN]${RESET}"
+TAG_ERROR="${RED}[ERROR]${RESET}"
+TAG_SKIP="${BLUE}[SKIP]${RESET}"
+TAG_CHECK="${CYAN}[CHECK]${RESET}"
+TAG_CREATE="${GREEN}[CREATE]${RESET}"
+TAG_TEST="${CYAN}[TEST]${RESET}"
+TAG_STOP="${RED}[STOP]${RESET}"
+
+# ==============================
 # 과제 명
 # ==============================
 
@@ -283,7 +305,7 @@ ask_install_required_packages_for_module() {
     return 0
   fi
 
-  printf '\n[INFO] module %s는 외부 라이브러리 설치를 요구하는 과제입니다.\n' "$module"
+  printf "\n${TAG_INFO} module %s는 외부 라이브러리 설치를 요구하는 과제입니다.\n" "$module"
   printf '필요 패키지:\n'
 
   while IFS= read -r pair; do
@@ -303,10 +325,10 @@ ask_install_required_packages_for_module() {
         python3 -m pip install --user "$package_name"
       done <<< "$packages"
       export PATH="$HOME/.local/bin:$PATH"
-      printf '[DONE] module %s 필요 패키지 설치 완료\n' "$module"
+      printf "${TAG_DONE} module %s 필요 패키지 설치 완료\n" "$module"
       ;;
     *)
-      printf '[SKIP] 패키지 설치를 건너뜁니다.\n'
+      printf "${TAG_SKIP} 패키지 설치를 건너뜁니다.\n"
       ;;
   esac
 }
@@ -322,7 +344,7 @@ create_module_structure() {
   local file_path
 
   if ! is_registered_module "$module"; then
-    printf '[ERROR] 등록되지 않은 module 번호입니다: %s\n' "$module"
+    printf "${TAG_ERROR} 등록되지 않은 module 번호입니다: %s\n" "$module"
     return 1
   fi
 
@@ -338,13 +360,13 @@ create_module_structure() {
     if [ ! -e "$file_path" ]; then
       touch "$file_path"
       chmod +x "$file_path"
-      printf '[CREATE] %s\n' "$file_path"
+      printf "${TAG_CREATE} %s\n" "$file_path"
     else
-      printf '[SKIP] 이미 존재함: %s\n' "$file_path"
+      printf "${TAG_SKIP} 이미 존재함: %s\n" "$file_path"
     fi
   done < <(get_module_files "$module")
 
-  printf '\n[DONE] python module %s 생성 완료\n' "$module"
+  printf "\n${TAG_DONE} python module %s 생성 완료\n" "$module"
   ask_install_required_packages_for_module "$module"
 }
 
@@ -382,9 +404,9 @@ ensure_local_bin_in_bashrc() {
 
   if ! grep -Fxq "$path_line" "$bashrc"; then
     printf '\n%s\n' "$path_line" >> "$bashrc"
-    printf '[DONE] 환경변수 등록 완료: %s\n' "$bashrc"
+    printf "${TAG_DONE} 환경변수 등록 완료: %s\n" "$bashrc"
   else
-    printf '[INFO] 환경변수가 이미 등록되어 있습니다.\n'
+    printf "${TAG_INFO} 환경변수가 이미 등록되어 있습니다.\n"
   fi
 }
 
@@ -397,7 +419,7 @@ ensure_tool_or_choose() {
     return 0
   fi
 
-  printf '\n[WARN] %s 가 설치되어 있지 않습니다.\n' "$tool"
+  printf "\n${TAG_WARN} %s 가 설치되어 있지 않습니다.\n" "$tool"
   printf '1. pip install --user %s 로 설치 후 다시 검사\n' "$package"
   printf '2. %s 검사를 무시하고 계속\n' "$tool"
   printf '3. 종료\n'
@@ -414,7 +436,7 @@ ensure_tool_or_choose() {
       command -v "$tool" >/dev/null 2>&1 && return 0
       python3 -m "$package" --version >/dev/null 2>&1 && return 2
 
-      printf '[ERROR] 설치 후에도 %s 실행을 확인하지 못했습니다.\n' "$tool"
+      printf "${TAG_ERROR} 설치 후에도 %s 실행을 확인하지 못했습니다.\n" "$tool"
       return 1
       ;;
     2)
@@ -444,7 +466,7 @@ run_flake8() {
       result=$?
       ;;
     3)
-      printf '[SKIP] flake8 검사를 건너뜁니다.\n'
+      printf "${TAG_SKIP} flake8 검사를 건너뜁니다.\n"
       return 0
       ;;
     *)
@@ -462,7 +484,7 @@ run_mypy_command() {
   mapfile -d '' files < <(find . -type f -name '*.py' ! -path './main.py' -print0)
 
   if [ "${#files[@]}" -eq 0 ]; then
-    printf '[SKIP] mypy 검사 대상 .py 파일이 없습니다.\n'
+    printf "${TAG_SKIP} mypy 검사 대상 .py 파일이 없습니다.\n"
     return 0
   fi
 
@@ -491,7 +513,7 @@ run_mypy() {
       result=$?
       ;;
     3)
-      printf '[SKIP] mypy 검사를 건너뜁니다.\n'
+      printf "${TAG_SKIP} mypy 검사를 건너뜁니다.\n"
       return 0
       ;;
     *)
@@ -506,12 +528,12 @@ run_mypy() {
 run_static_checks() {
   local base_dir="$1"
 
-  printf '\n[CHECK] flake8 실행\n'
+  printf "\n${TAG_CHECK} flake8 실행\n"
   if ! run_flake8 "$base_dir"; then
     return 1
   fi
 
-  printf '\n[CHECK] mypy --strict 실행(main.py 제외)\n'
+  printf "\n${TAG_CHECK} mypy --strict 실행(main.py 제외)\n"
   if ! run_mypy "$base_dir"; then
     return 1
   fi
@@ -523,7 +545,7 @@ run_static_checks() {
 handle_static_check_error() {
   local answer
 
-  printf '\n[WARN] 정적 검사 에러가 감지되었습니다.\n'
+  printf "\n${TAG_WARN} 정적 검사 에러가 감지되었습니다.\n"
   printf '1. 초기화면으로 돌아가기\n'
   printf '2. 무시하고 실행 테스트 계속하기\n'
   printf '3. 종료\n'
@@ -541,7 +563,7 @@ handle_static_check_error() {
       exit 0
       ;;
     *)
-      printf '[ERROR] 잘못된 입력입니다. 초기화면으로 돌아갑니다.\n'
+      printf "${TAG_ERROR} 잘못된 입력입니다. 초기화면으로 돌아갑니다.\n"
       return 1
       ;;
   esac
@@ -556,11 +578,11 @@ run_entry_file() {
   local file_name="$2"
 
   if [ ! -f "$run_dir/$file_name" ]; then
-    printf '[WARN] 진입점 파일 없음: %s/%s\n' "$run_dir" "$file_name"
+    printf "${TAG_WARN} 진입점 파일 없음: %s/%s\n" "$run_dir" "$file_name"
     return 1
   fi
 
-  printf '\n[RUN] %s - python3 %s\n' "$run_dir" "$file_name"
+  printf "\n${TAG_RUN} %s - python3 %s\n" "$run_dir" "$file_name"
   (cd "$run_dir" || exit 1; python3 "$file_name")
 }
 
@@ -570,11 +592,11 @@ run_entry_file_with_args() {
   shift 2
 
   if [ ! -f "$run_dir/$file_name" ]; then
-    printf '[WARN] 진입점 파일 없음: %s/%s\n' "$run_dir" "$file_name"
+    printf "${TAG_WARN} 진입점 파일 없음: %s/%s\n" "$run_dir" "$file_name"
     return 1
   fi
 
-  printf '\n[RUN] %s - python3 %s' "$run_dir" "$file_name"
+  printf "\n${TAG_RUN} %s - python3 %s" "$run_dir" "$file_name"
   if [ "$#" -gt 0 ]; then
     printf ' %q' "$@"
   fi
@@ -622,7 +644,7 @@ ask_remove_generated_files() {
     return 0
   fi
 
-  printf '\n[WARN] module %s 테스트 산출물이 감지되었습니다.\n' "$module"
+  printf "\n${TAG_WARN} module %s 테스트 산출물이 감지되었습니다.\n" "$module"
   printf '%s\n' "$found_items"
   printf '삭제하겠습니까? [y/N] '
   read -r answer
@@ -632,10 +654,10 @@ ask_remove_generated_files() {
       while IFS= read -r item; do
         [ -e "$item" ] && rm -rf "$item"
       done <<< "$found_items"
-      printf '[DONE] 생성 파일/디렉토리 삭제 완료\n'
+      printf "${TAG_DONE} 생성 파일/디렉토리 삭제 완료\n"
       ;;
     *)
-      printf '[SKIP] 생성 파일/디렉토리 삭제를 건너뜁니다.\n'
+      printf "${TAG_SKIP} 생성 파일/디렉토리 삭제를 건너뜁니다.\n"
       ;;
   esac
 }
@@ -649,7 +671,7 @@ ensure_python_package_or_exit() {
     return 0
   fi
 
-  printf '\n[WARN] %s 패키지가 설치되어 있지 않습니다.\n' "$package_name"
+  printf "\n${TAG_WARN} %s 패키지가 설치되어 있지 않습니다.\n" "$package_name"
   printf '1. pip install --user %s 로 설치\n' "$package_name"
   printf '2. 종료\n'
   printf '> '
@@ -659,7 +681,7 @@ ensure_python_package_or_exit() {
     1)
       python3 -m pip install --user "$package_name"
       python3 -c "import ${import_name}" >/dev/null 2>&1 || {
-        printf '[ERROR] 설치 후에도 %s import에 실패했습니다.\n' "$import_name"
+        printf "${TAG_ERROR} 설치 후에도 %s import에 실패했습니다.\n" "$import_name"
         return 1
       }
       ;;
@@ -677,12 +699,12 @@ run_module_test_by_mapping() {
   tester="$(get_module_tester "$module")"
 
   if [ -z "$tester" ]; then
-    printf '[WARN] module %s 테스터 로직이 업데이트 되어있지 않습니다.\n' "$module"
+    printf "${TAG_WARN} module %s 테스터 로직이 업데이트 되어있지 않습니다.\n" "$module"
     return 1
   fi
 
   if ! declare -F "$tester" >/dev/null 2>&1; then
-    printf '[ERROR] 테스트 함수가 존재하지 않습니다: %s\n' "$tester"
+    printf "${TAG_ERROR} 테스트 함수가 존재하지 않습니다: %s\n" "$tester"
     return 1
   fi
 
@@ -711,7 +733,7 @@ run_generic_ex_file_tests() {
     file_path="$base_dir/$item"
 
     if [ ! -f "$file_path" ]; then
-      printf '[WARN] 파일 없음: %s\n' "$file_path"
+      printf "${TAG_WARN} 파일 없음: %s\n" "$file_path"
       result=1
       continue
     fi
@@ -719,7 +741,7 @@ run_generic_ex_file_tests() {
     run_dir="$(dirname "$file_path")"
     file_name="$(basename "$file_path")"
 
-    printf '\n[RUN] python module %s/%s - python3 %s\n' "$module" "$(dirname "$item")" "$file_name"
+    printf "\n${TAG_RUN} python module %s/%s - python3 %s\n" "$module" "$(dirname "$item")" "$file_name"
 
     if ! (cd "$run_dir" || exit 1; python3 "$file_name"); then
       result=1
@@ -736,13 +758,13 @@ run_module_00_tests() {
   local result=0
 
   if [ ! -f "$helper_main" ]; then
-    printf '\n[ERROR] helper main.py가 없습니다: %s\n' "$helper_main"
+    printf "\n${TAG_ERROR} helper main.py가 없습니다: %s\n" "$helper_main"
     return 1
   fi
 
   cp "$helper_main" "$base_dir/main.py"
 
-  printf '\n[RUN] module 00 helper main.py 실행\n'
+  printf "\n${TAG_RUN} module 00 helper main.py 실행\n"
   (
     cd "$base_dir" || exit 1
     python3 main.py
@@ -758,7 +780,7 @@ run_module_03_tests() {
   local base_dir="$2"
   local result=0
 
-  printf '\n[INFO] module 03 인자 기반 테스트\n'
+  printf "\n${TAG_INFO} module 03 인자 기반 테스트\n"
 
   run_entry_file_with_args "$base_dir/ex0" "ft_command_quest.py" || result=1
   run_entry_file_with_args "$base_dir/ex0" "ft_command_quest.py" hello world 42 || result=1
@@ -768,7 +790,7 @@ run_module_03_tests() {
   run_entry_file_with_args "$base_dir/ex1" "ft_score_analytics.py" || result=1
   run_entry_file_with_args "$base_dir/ex1" "ft_score_analytics.py" ab ac || result=1
 
-  printf '\n[RUN] ex2/ft_coordinate_system.py - input pipe test\n'
+  printf "\n${TAG_RUN} ex2/ft_coordinate_system.py - input pipe test\n"
   (
     cd "$base_dir/ex2" || exit 1
     printf 'hello world\n1.0 , 2.5, 3.0\n4,abc,5\n4,5,6\n' | python3 ft_coordinate_system.py
@@ -793,23 +815,23 @@ run_module_04_tests() {
   local result=0
 
   if [ ! -f "$sample_file" ]; then
-    printf '[ERROR] module 04 테스트 리소스 파일이 없습니다: %s\n' "$sample_file"
+    printf "${TAG_ERROR} module 04 테스트 리소스 파일이 없습니다: %s\n" "$sample_file"
     return 1
   fi
 
-  printf '\n[INFO] module 04 파일 입출력 테스트\n'
+  printf "\n${TAG_INFO} module 04 파일 입출력 테스트\n"
 
   run_entry_file_with_args "$base_dir/ex0" "ft_ancient_text.py" || result=1
   run_entry_file_with_args "$base_dir/ex0" "ft_ancient_text.py" "foo" || result=1
   run_entry_file_with_args "$base_dir/ex0" "ft_ancient_text.py" "$sample_file" || result=1
 
-  printf '\n[RUN] ex1/ft_archive_creation.py - 저장하지 않는 케이스\n'
+  printf "\n${TAG_RUN} ex1/ft_archive_creation.py - 저장하지 않는 케이스\n"
   (
     cd "$base_dir/ex1" || exit 1
     printf '\n' | python3 ft_archive_creation.py "$sample_file"
   ) || result=1
 
-  printf '\n[RUN] ex1/ft_archive_creation.py - 새 파일 저장 케이스\n'
+  printf "\n${TAG_RUN} ex1/ft_archive_creation.py - 새 파일 저장 케이스\n"
   (
     cd "$base_dir/ex1" || exit 1
     rm -f new_fragment.txt
@@ -819,7 +841,7 @@ run_module_04_tests() {
 
   run_entry_file_with_args "$base_dir/ex2" "ft_stream_management.py" "foo" || result=1
 
-  printf '\n[RUN] ex2/ft_stream_management.py - 저장 권한 에러 케이스\n'
+  printf "\n${TAG_RUN} ex2/ft_stream_management.py - 저장 권한 에러 케이스\n"
   (
     cd "$base_dir/ex2" || exit 1
     printf '/etc/passwd\n' | python3 ft_stream_management.py "$sample_file"
@@ -846,7 +868,7 @@ run_module_06_tests() {
   local base_dir="$2"
   local result=0
 
-  printf '\n[INFO] module 06 패키지형 테스트\n'
+  printf "\n${TAG_INFO} module 06 패키지형 테스트\n"
 
   run_entry_file "$base_dir" "ft_alembic_0.py" || result=1
   run_entry_file "$base_dir" "ft_alembic_1.py" || result=1
@@ -870,7 +892,7 @@ run_module_07_tests() {
   local base_dir="$2"
   local result=0
 
-  printf '\n[INFO] module 07 패키지형 테스트\n'
+  printf "\n${TAG_INFO} module 07 패키지형 테스트\n"
 
   run_entry_file "$base_dir" "battle.py" || result=1
   run_entry_file "$base_dir" "capacitor.py" || result=1
@@ -884,7 +906,7 @@ run_module_08_tests() {
   local base_dir="$2"
   local result=0
 
-  printf '\n[INFO] module 08 환경/패키지/config 테스트\n'
+  printf "\n${TAG_INFO} module 08 환경/패키지/config 테스트\n"
 
   ensure_python_package_or_exit "pandas" "pandas" || return 1
   ensure_python_package_or_exit "numpy" "numpy" || return 1
@@ -895,12 +917,12 @@ run_module_08_tests() {
   run_entry_file "$base_dir/ex1" "loading.py" || result=1
 
   if [ ! -f "$base_dir/ex2/.env" ]; then
-    printf '\n[WARN] ex2/.env 파일이 없습니다. oracle.py 기본 동작만 확인합니다.\n'
+    printf "\n${TAG_WARN} ex2/.env 파일이 없습니다. oracle.py 기본 동작만 확인합니다.\n"
   fi
 
   run_entry_file "$base_dir/ex2" "oracle.py" || result=1
 
-  printf '\n[TEST] 환경변수 override 실행\n'
+  printf "\n${TAG_TEST} 환경변수 override 실행\n"
   (
     cd "$base_dir/ex2" || exit 1
     MATRIX_MODE=production API_KEY=secret123 python3 oracle.py
@@ -923,7 +945,7 @@ run_module_09_tests() {
 
   if [ ! -f "$resource_dir/data_generator.py" ] ||
      [ ! -f "$resource_dir/data_exporter.py" ]; then
-    printf '[ERROR] module 09 리소스 파일이 없습니다.\n'
+    printf "${TAG_ERROR} module 09 리소스 파일이 없습니다.\n"
     return 1
   fi
 
@@ -953,18 +975,18 @@ run_module_10_tests() {
   local generator_dst="$base_dir/data_generator.py"
   local result=0
 
-  printf '\n[INFO] module 10 functional programming 테스트\n'
+  printf "\n${TAG_INFO} module 10 functional programming 테스트\n"
 
   if [ -f "$generator_src" ]; then
     cp "$generator_src" "$generator_dst"
-    printf '\n[TEST] data_generator.py 전체 샘플 출력\n'
+    printf "\n${TAG_TEST} data_generator.py 전체 샘플 출력\n"
     (
       cd "$base_dir" || exit 1
       printf '5\nq\n' | python3 data_generator.py
     ) || result=1
     rm -f "$generator_dst"
   else
-    printf '[WARN] module 10 data_generator.py 리소스가 없습니다: %s\n' "$generator_src"
+    printf "${TAG_WARN} module 10 data_generator.py 리소스가 없습니다: %s\n" "$generator_src"
   fi
 
   run_entry_file "$base_dir/ex0" "lambda_spells.py" || result=1
@@ -985,14 +1007,14 @@ run_tests_for_module() {
   local base_dir
 
   if ! is_registered_module "$module"; then
-    printf '[ERROR] 등록되지 않은 module 번호입니다: %s\n' "$module"
+    printf "${TAG_ERROR} 등록되지 않은 module 번호입니다: %s\n" "$module"
     return 1
   fi
 
   base_dir="$(module_dir "$module")"
 
   if [ ! -d "$base_dir" ]; then
-    printf '[ERROR] 과제 폴더가 없습니다: %s\n' "$base_dir"
+    printf "${TAG_ERROR} 과제 폴더가 없습니다: %s\n" "$base_dir"
     return 1
   fi
 
@@ -1008,13 +1030,13 @@ run_tests_for_module() {
   if ! run_module_test_by_mapping "$module" "$base_dir"; then
     remove_mypy_cache "$base_dir"
     remove_pycache "$base_dir"
-    printf '\n[WARN] 실행 테스트 중 실패가 감지되었습니다: python module %s\n' "$module"
+    printf "\n${TAG_WARN} 실행 테스트 중 실패가 감지되었습니다: python module %s\n" "$module"
     return 1
   fi
 
   remove_mypy_cache "$base_dir"
   remove_pycache "$base_dir"
-  printf '\n[DONE] 테스트 종료 및 캐시 정리 완료: python module %s\n' "$module"
+  printf "\n${TAG_DONE} 테스트 종료 및 캐시 정리 완료: python module %s\n" "$module"
 }
 
 select_test_module() {
@@ -1051,28 +1073,28 @@ install_glow() {
   mkdir -p "$cache_dir"
   mkdir -p "$HOME/.local/bin"
 
-  printf '\n[INFO] glow 설치를 시작합니다.\n'
+  printf "\n${TAG_INFO} glow 설치를 시작합니다.\n"
 
   (
     cd "$cache_dir" || exit 1
 
     if ! curl -fL -o glow.tar.gz "$archive_url"; then
-      printf '\n[ERROR] glow 다운로드에 실패했습니다.\n'
+      printf "\n${TAG_ERROR} glow 다운로드에 실패했습니다.\n"
       exit 2
     fi
 
     if ! tar -xzf glow.tar.gz; then
-      printf '\n[ERROR] glow.tar.gz 압축 해제에 실패했습니다.\n'
+      printf "\n${TAG_ERROR} glow.tar.gz 압축 해제에 실패했습니다.\n"
       exit 3
     fi
 
     if [ ! -f "glow_2.0.0_Linux_x86_64/glow" ]; then
-      printf '\n[ERROR] glow 바이너리를 찾지 못했습니다.\n'
+      printf "\n${TAG_ERROR} glow 바이너리를 찾지 못했습니다.\n"
       exit 4
     fi
 
     if ! mv glow_2.0.0_Linux_x86_64/glow "$glow_path"; then
-      printf '\n[ERROR] glow 바이너리 이동에 실패했습니다.\n'
+      printf "\n${TAG_ERROR} glow 바이너리 이동에 실패했습니다.\n"
       exit 5
     fi
 
@@ -1082,12 +1104,12 @@ install_glow() {
   case "$?" in
     0)
       rm -rf "$cache_dir"
-      printf '\n[DONE] glow 설치가 완료되었습니다.\n'
+      printf "\n${TAG_DONE} glow 설치가 완료되었습니다.\n"
       return 0
       ;;
     *)
       rm -rf "$cache_dir"
-      printf '\n[STOP] glow 설치를 중단했습니다.\n'
+      printf "\n${TAG_STOP} glow 설치를 중단했습니다.\n"
       return 1
       ;;
   esac
@@ -1097,7 +1119,7 @@ ask_glow_or_cat() {
   local answer
   local next_answer
 
-  printf '\n[WARN] glow가 설치되어 있지 않습니다. 설치하겠습니까? (16.7 MB)\n'
+  printf "\n${TAG_WARN} glow가 설치되어 있지 않습니다. 설치하겠습니까? (16.7 MB)\n"
   printf '1. 설치하기\n'
   printf '2. glow 없이 보기\n'
   printf '3. 초기화면으로 돌아가기\n'
@@ -1177,7 +1199,7 @@ show_tip_file() {
         print_line
         "$glow_path" "$tip_file"
       else
-        printf '\n[ERROR] glow 설치 후에도 실행 파일을 찾지 못했습니다.\n'
+        printf "\n${TAG_ERROR} glow 설치 후에도 실행 파일을 찾지 못했습니다.\n"
         return 1
       fi
       ;;
@@ -1281,7 +1303,7 @@ select_tip_module() {
   modules="$(list_tip_modules)"
 
   if [ -z "$modules" ]; then
-    printf '\n[WARN] tip이 업데이트되어있지 않습니다.\n'
+    printf "\n${TAG_WARN} tip이 업데이트되어있지 않습니다.\n"
     return 1
   fi
 
@@ -1292,7 +1314,7 @@ select_tip_module() {
   read -r module
 
   if [ ! -d "$SCRIPT_DIR/resource/tips/$module" ]; then
-    printf '\n[WARN] 해당 module tip이 없습니다: %s\n' "$module"
+    printf "\n${TAG_WARN} 해당 module tip이 없습니다: %s\n" "$module"
     return 1
   fi
 
@@ -1308,7 +1330,7 @@ select_tip_file() {
   tip_files="$(list_tip_files "$module")"
 
   if [ -z "$tip_files" ]; then
-    printf '\n[WARN] tip이 업데이트되어있지 않습니다.\n'
+    printf "\n${TAG_WARN} tip이 업데이트되어있지 않습니다.\n"
     return 1
   fi
 
@@ -1321,7 +1343,7 @@ select_tip_file() {
   tip_file="$(get_tip_file_by_index "$module" "$tip_index")"
 
   if [ -z "$tip_file" ]; then
-    printf '\n[WARN] 해당 번호의 tip 파일이 없습니다: %s\n' "$tip_index"
+    printf "\n${TAG_WARN} 해당 번호의 tip 파일이 없습니다: %s\n" "$tip_index"
     return 1
   fi
 
@@ -1341,7 +1363,7 @@ show_manual() {
   print_line
 
   if [ ! -f "$manual_file" ]; then
-    printf '[WARN] 메뉴얼 파일이 없습니다: %s\n' "$manual_file"
+    printf "${TAG_WARN} 메뉴얼 파일이 없습니다: %s\n" "$manual_file"
     return 1
   fi
 
@@ -1405,7 +1427,7 @@ main_menu() {
         exit 0
         ;;
       *)
-        printf '[ERROR] 잘못된 입력입니다.\n'
+        printf "${TAG_ERROR} 잘못된 입력입니다.\n"
         pause
         ;;
     esac
