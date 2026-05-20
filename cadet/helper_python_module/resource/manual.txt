@@ -34,7 +34,7 @@
     이미 존재하는 파일은 덮어쓰지 않고 건너뜁니다.
     새로 생성된 .py 파일에는 +x 실행 권한을 부여합니다.
 
-  2. 테스터 실행
+  2. 정적 검사 및 실행 테스트
 
     선택한 module 폴더에서 다음 순서로 검사를 진행합니다.
 
@@ -58,35 +58,49 @@
 
     mypy 검사는 main.py를 제외하고 실행됩니다.
 
-  module별 테스트 방식
+    이 헬퍼 스크립트는 bash 환경을 기준으로 제작되었습니다.
+    패키지 설치 시 ~/.local/bin 경로를 bash 환경변수 기준으로 사용합니다.
 
-    각 module은 설정된 테스트 함수에 따라 실행됩니다.
-    해당 module의 테스트 로직이 아직 업데이트되지 않았다면
-    관련 안내가 출력됩니다.
+    따라서 flake8, mypy, glow 등의 실행파일은 일반적으로 다음 경로에 설치됩니다.
 
-  일반 테스트 방식
+      ~/.local/bin
 
-    일반 module은 등록된 파일을 순서대로 실행합니다.
-    각 파일이 있는 폴더로 이동한 뒤 python3 파일명 형식으로 실행합니다.
+    ~/.bashrc 에 아래 환경변수를 자동으로 추가합니다.
 
-    예:
+      export PATH="$HOME/.local/bin:$PATH"
 
-      python module 01/ex0/ft_garden_intro.py
+    만약 zsh 등의 다른 셸을 사용 중이라면
+    사용하는 셸의 설정파일(~/.zshrc 등)에 동일한 내용을 직접 추가해야 합니다.
 
-    실행 시:
+    module별 테스트 방식
 
-      cd "python module 01/ex0"
-      python3 ft_garden_intro.py
+      각 module은 설정된 테스트 함수에 따라 실행됩니다.
+      해당 module의 테스트 로직이 아직 업데이트되지 않았다면
+      관련 안내가 출력됩니다.
 
-  특수 테스트 방식
+    일반 테스트 방식
 
-    module 00은 helper_python_module/resource/00/main.py 파일을
-    python module 00/main.py 위치로 임시 복사한 뒤 실행합니다.
-    실행이 끝나면 복사한 main.py는 삭제됩니다.
-    기존 main.py가 있었다면 백업 후 복원합니다.
+      일반 module은 등록된 파일을 순서대로 실행합니다.
+      각 파일이 있는 폴더로 이동한 뒤 python3 파일명 형식으로 실행합니다.
 
-    module 06, module 07처럼 패키지 구조가 필요한 과제는
-    별도의 테스트 함수를 만들어 진입점 파일을 직접 지정해 실행할 수 있습니다.
+      예:
+
+        python module 01/ex0/ft_garden_intro.py
+
+      실행 시:
+
+        cd "python module 01/ex0"
+        python3 ft_garden_intro.py
+
+    특수 테스트 방식
+
+      module 00은 helper_python_module/resource/00/main.py 파일을
+      python module 00/main.py 위치로 임시 복사한 뒤 실행합니다.
+      실행이 끝나면 복사한 main.py는 삭제됩니다.
+      기존 main.py가 있었다면 백업 후 복원합니다.
+
+      module 06, module 07처럼 패키지 구조가 필요한 과제는
+      별도의 테스트 함수를 만들어 진입점 파일을 직접 지정해 실행할 수 있습니다.
 
   3. 문제별 팁 보기
 

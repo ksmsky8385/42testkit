@@ -156,14 +156,37 @@ MODULE_10_FILES=(
 MODULE_00_TESTER="run_module_00_tests"
 MODULE_01_TESTER="run_generic_module_tests"
 MODULE_02_TESTER="run_generic_module_tests"
-MODULE_03_TESTER=""
-MODULE_04_TESTER=""
-MODULE_05_TESTER=""
+MODULE_03_TESTER="run_module_03_tests"
+MODULE_04_TESTER="run_module_04_tests"
+MODULE_05_TESTER="run_module_05_tests"
 MODULE_06_TESTER="run_module_06_tests"
 MODULE_07_TESTER="run_module_07_tests"
-MODULE_08_TESTER=""
-MODULE_09_TESTER=""
-MODULE_10_TESTER=""
+MODULE_08_TESTER="run_module_08_tests"
+MODULE_09_TESTER="run_module_09_tests"
+MODULE_10_TESTER="run_module_10_tests"
+
+# ==============================
+# 모듈별 요구 패키지
+# ==============================
+
+MODULE_08_REQUIRED_PACKAGES=(
+  "pandas:pandas"
+  "numpy:numpy"
+  "matplotlib:matplotlib"
+  "dotenv:python-dotenv"
+)
+
+MODULE_09_REQUIRED_PACKAGES=(
+  "pydantic:pydantic>=2"
+)
+
+# ==============================
+# 모듈별 테스트 산출물 삭제 대상
+# ==============================
+
+MODULE_05_CLEANUP_PATTERNS=("output" "result" "csv" "json")
+MODULE_08_CLEANUP_PATTERNS=("png")
+MODULE_09_CLEANUP_PATTERNS=("generated_data")
 
 # ==============================
 # 공통 유틸
@@ -236,6 +259,58 @@ print_registered_modules_with_names() {
   done
 }
 
+get_module_required_packages_var() {
+  printf 'MODULE_%s_REQUIRED_PACKAGES' "$1"
+}
+
+get_module_required_packages() {
+  local var_name
+
+  var_name="$(get_module_required_packages_var "$1")"
+  eval 'printf "%s\n" "${'"$var_name"'[@]:-}"'
+}
+
+ask_install_required_packages_for_module() {
+  local module="$1"
+  local packages
+  local answer
+  local pair
+  local package_name
+
+  packages="$(get_module_required_packages "$module")"
+
+  if [ -z "$packages" ]; then
+    return 0
+  fi
+
+  printf '\n[INFO] module %s는 외부 라이브러리 설치를 요구하는 과제입니다.\n' "$module"
+  printf '필요 패키지:\n'
+
+  while IFS= read -r pair; do
+    [ -z "$pair" ] && continue
+    package_name="${pair#*:}"
+    printf '%s\n' "- $package_name"
+  done <<< "$packages"
+
+  printf '설치하시겠습니까? [y/N] '
+  read -r answer
+
+  case "$answer" in
+    y|Y|yes|YES)
+      while IFS= read -r pair; do
+        [ -z "$pair" ] && continue
+        package_name="${pair#*:}"
+        python3 -m pip install --user "$package_name"
+      done <<< "$packages"
+      export PATH="$HOME/.local/bin:$PATH"
+      printf '[DONE] module %s 필요 패키지 설치 완료\n' "$module"
+      ;;
+    *)
+      printf '[SKIP] 패키지 설치를 건너뜁니다.\n'
+      ;;
+  esac
+}
+
 # ==============================
 # 디렉토리/파일 생성
 # ==============================
@@ -270,6 +345,7 @@ create_module_structure() {
   done < <(get_module_files "$module")
 
   printf '\n[DONE] python module %s 생성 완료\n' "$module"
+  ask_install_required_packages_for_module "$module"
 }
 
 select_create_modules() {
@@ -296,6 +372,22 @@ select_create_modules() {
 # 정적 검사
 # ==============================
 
+ensure_local_bin_in_bashrc() {
+  local bashrc="$HOME/.bashrc"
+  local path_line='export PATH="$HOME/.local/bin:$PATH"'
+
+  if [ ! -f "$bashrc" ]; then
+    touch "$bashrc"
+  fi
+
+  if ! grep -Fxq "$path_line" "$bashrc"; then
+    printf '\n%s\n' "$path_line" >> "$bashrc"
+    printf '[DONE] 환경변수 등록 완료: %s\n' "$bashrc"
+  else
+    printf '[INFO] 환경변수가 이미 등록되어 있습니다.\n'
+  fi
+}
+
 ensure_tool_or_choose() {
   local tool="$1"
   local package="$2"
@@ -315,8 +407,13 @@ ensure_tool_or_choose() {
   case "$answer" in
     1)
       python3 -m pip install --user "$package"
+      ensure_local_bin_in_bashrc
+
+      export PATH="$HOME/.local/bin:$PATH"
+
       command -v "$tool" >/dev/null 2>&1 && return 0
       python3 -m "$package" --version >/dev/null 2>&1 && return 2
+
       printf '[ERROR] 설치 후에도 %s 실행을 확인하지 못했습니다.\n' "$tool"
       return 1
       ;;
@@ -467,104 +564,109 @@ run_entry_file() {
   (cd "$run_dir" || exit 1; python3 "$file_name")
 }
 
-run_generic_ex_file_tests() {
-  local module="$1"
-  local base_dir="$2"
-  local item
-  local file_path
-  local run_dir
-  local file_name
+run_entry_file_with_args() {
+  local run_dir="$1"
+  local file_name="$2"
+  shift 2
 
-  while IFS= read -r item; do
-    [ -z "$item" ] && continue
-
-    file_path="$base_dir/$item"
-
-    if [ ! -f "$file_path" ]; then
-      printf '[WARN] 파일 없음: %s\n' "$file_path"
-      continue
-    fi
-
-    run_dir="$(dirname "$file_path")"
-    file_name="$(basename "$file_path")"
-
-    printf '\n[RUN] python module %s/%s - python3 %s\n' "$module" "$(dirname "$item")" "$file_name"
-    (cd "$run_dir" || exit 1; python3 "$file_name")
-  done < <(get_module_files "$module")
-}
-
-run_generic_module_tests() {
-  local module="$1"
-  local base_dir="$2"
-
-  run_generic_ex_file_tests "$module" "$base_dir"
-}
-
-run_module_00_tests() {
-  local _module="$1"
-  local base_dir="$2"
-  local helper_main="$SCRIPT_DIR/resource/module_00/main.py"
-  local target_main="$base_dir/main.py"
-  local backup_main="$base_dir/main.py.helper_backup.$$"
-  local had_original=0
-  local result
-
-  if [ ! -f "$helper_main" ]; then
-    printf '\n[ERROR] helper main.py가 없습니다: %s\n' "$helper_main"
+  if [ ! -f "$run_dir/$file_name" ]; then
+    printf '[WARN] 진입점 파일 없음: %s/%s\n' "$run_dir" "$file_name"
     return 1
   fi
 
-  if [ -f "$target_main" ]; then
-    had_original=1
-    mv "$target_main" "$backup_main"
+  printf '\n[RUN] %s - python3 %s' "$run_dir" "$file_name"
+  if [ "$#" -gt 0 ]; then
+    printf ' %q' "$@"
   fi
+  printf '\n'
 
-  cp "$helper_main" "$target_main"
-  chmod +x "$target_main"
-
-  printf '\n[RUN] module 00 helper main.py 실행\n'
-  (cd "$base_dir" || exit 1; python3 main.py)
-  result=$?
-
-  rm -f "$target_main"
-
-  if [ "$had_original" -eq 1 ]; then
-    mv "$backup_main" "$target_main"
-  fi
-
-  return "$result"
+  (cd "$run_dir" || exit 1; python3 "$file_name" "$@")
 }
 
-run_module_06_tests() {
-  local _module="$1"
-  local base_dir="$2"
-
-  printf '\n[INFO] module 06 패키지형 테스트\n'
-
-  run_entry_file "$base_dir" "ft_alembic_0.py"
-  run_entry_file "$base_dir" "ft_alembic_1.py"
-  run_entry_file "$base_dir" "ft_alembic_2.py"
-  run_entry_file "$base_dir" "ft_alembic_3.py"
-  run_entry_file "$base_dir" "ft_alembic_4.py"
-  run_entry_file "$base_dir" "ft_alembic_5.py"
-  run_entry_file "$base_dir" "ft_distillation_0.py"
-  run_entry_file "$base_dir" "ft_distillation_1.py"
-  run_entry_file "$base_dir" "ft_kaboom_0.py"
-  run_entry_file "$base_dir" "ft_kaboom_1.py"
-  run_entry_file "$base_dir" "ft_transmutation_0.py"
-  run_entry_file "$base_dir" "ft_transmutation_1.py"
-  run_entry_file "$base_dir" "ft_transmutation_2.py"
+get_module_cleanup_patterns_var() {
+  printf 'MODULE_%s_CLEANUP_PATTERNS' "$1"
 }
 
-run_module_07_tests() {
-  local _module="$1"
-  local base_dir="$2"
+get_module_cleanup_patterns() {
+  local var_name
 
-  printf '\n[INFO] module 07 패키지형 테스트\n'
+  var_name="$(get_module_cleanup_patterns_var "$1")"
+  eval 'printf "%s\n" "${'"$var_name"'[@]:-}"'
+}
 
-  run_entry_file "$base_dir" "battle.py"
-  run_entry_file "$base_dir" "capacitor.py"
-  run_entry_file "$base_dir" "tournament.py"
+ask_remove_generated_files() {
+  local module="$1"
+  local target_dir="$2"
+  local answer
+  local patterns
+  local found_items=""
+
+  patterns="$(get_module_cleanup_patterns "$module")"
+
+  if [ -z "$patterns" ]; then
+    return 0
+  fi
+
+  while IFS= read -r pattern; do
+    [ -z "$pattern" ] && continue
+
+    found_items="$(
+      {
+        printf '%s\n' "$found_items"
+        find "$target_dir" -mindepth 1 \( -type f -o -type d \) -name "*$pattern*" -print
+      } | sed '/^$/d' | sort -u
+    )"
+  done <<< "$patterns"
+
+  if [ -z "$found_items" ]; then
+    return 0
+  fi
+
+  printf '\n[WARN] module %s 테스트 산출물이 감지되었습니다.\n' "$module"
+  printf '%s\n' "$found_items"
+  printf '삭제하겠습니까? [y/N] '
+  read -r answer
+
+  case "$answer" in
+    y|Y|yes|YES)
+      while IFS= read -r item; do
+        [ -e "$item" ] && rm -rf "$item"
+      done <<< "$found_items"
+      printf '[DONE] 생성 파일/디렉토리 삭제 완료\n'
+      ;;
+    *)
+      printf '[SKIP] 생성 파일/디렉토리 삭제를 건너뜁니다.\n'
+      ;;
+  esac
+}
+
+ensure_python_package_or_exit() {
+  local import_name="$1"
+  local package_name="$2"
+  local answer
+
+  if python3 -c "import ${import_name}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  printf '\n[WARN] %s 패키지가 설치되어 있지 않습니다.\n' "$package_name"
+  printf '1. pip install --user %s 로 설치\n' "$package_name"
+  printf '2. 종료\n'
+  printf '> '
+  read -r answer
+
+  case "$answer" in
+    1)
+      python3 -m pip install --user "$package_name"
+      python3 -c "import ${import_name}" >/dev/null 2>&1 || {
+        printf '[ERROR] 설치 후에도 %s import에 실패했습니다.\n' "$import_name"
+        return 1
+      }
+      ;;
+    *)
+      exit 0
+      ;;
+  esac
 }
 
 run_module_test_by_mapping() {
@@ -585,6 +687,293 @@ run_module_test_by_mapping() {
   fi
 
   "$tester" "$module" "$base_dir"
+}
+
+run_generic_module_tests() {
+  local module="$1"
+  local base_dir="$2"
+
+  run_generic_ex_file_tests "$module" "$base_dir"
+}
+
+run_generic_ex_file_tests() {
+  local module="$1"
+  local base_dir="$2"
+  local item
+  local file_path
+  local run_dir
+  local file_name
+  local result=0
+
+  while IFS= read -r item; do
+    [ -z "$item" ] && continue
+
+    file_path="$base_dir/$item"
+
+    if [ ! -f "$file_path" ]; then
+      printf '[WARN] 파일 없음: %s\n' "$file_path"
+      result=1
+      continue
+    fi
+
+    run_dir="$(dirname "$file_path")"
+    file_name="$(basename "$file_path")"
+
+    printf '\n[RUN] python module %s/%s - python3 %s\n' "$module" "$(dirname "$item")" "$file_name"
+
+    if ! (cd "$run_dir" || exit 1; python3 "$file_name"); then
+      result=1
+    fi
+  done < <(get_module_files "$module")
+
+  return "$result"
+}
+
+run_module_00_tests() {
+  local _module="$1"
+  local base_dir="$2"
+  local helper_main="$SCRIPT_DIR/resource/module_00/main.py"
+  local result=0
+
+  if [ ! -f "$helper_main" ]; then
+    printf '\n[ERROR] helper main.py가 없습니다: %s\n' "$helper_main"
+    return 1
+  fi
+
+  cp "$helper_main" "$base_dir/main.py"
+
+  printf '\n[RUN] module 00 helper main.py 실행\n'
+  (
+    cd "$base_dir" || exit 1
+    python3 main.py
+  ) || result=1
+
+  rm -f "$base_dir/main.py"
+
+  return "$result"
+}
+
+run_module_03_tests() {
+  local _module="$1"
+  local base_dir="$2"
+  local result=0
+
+  printf '\n[INFO] module 03 인자 기반 테스트\n'
+
+  run_entry_file_with_args "$base_dir/ex0" "ft_command_quest.py" || result=1
+  run_entry_file_with_args "$base_dir/ex0" "ft_command_quest.py" hello world 42 || result=1
+  run_entry_file_with_args "$base_dir/ex0" "ft_command_quest.py" "Data Quest" || result=1
+
+  run_entry_file_with_args "$base_dir/ex1" "ft_score_analytics.py" 1500 2300 1800 2100 1950 || result=1
+  run_entry_file_with_args "$base_dir/ex1" "ft_score_analytics.py" || result=1
+  run_entry_file_with_args "$base_dir/ex1" "ft_score_analytics.py" ab ac || result=1
+
+  printf '\n[RUN] ex2/ft_coordinate_system.py - input pipe test\n'
+  (
+    cd "$base_dir/ex2" || exit 1
+    printf 'hello world\n1.0 , 2.5, 3.0\n4,abc,5\n4,5,6\n' | python3 ft_coordinate_system.py
+  ) || result=1
+
+  run_entry_file_with_args "$base_dir/ex3" "ft_achievement_tracker.py" || result=1
+
+  run_entry_file_with_args "$base_dir/ex4" "ft_inventory_system.py" \
+    sword:1 potion:5 shield:2 armor:3 helmet:1 sword:2 hello key:value || result=1
+
+  run_entry_file_with_args "$base_dir/ex5" "ft_data_stream.py" || result=1
+  run_entry_file_with_args "$base_dir/ex6" "ft_data_alchemist.py" || result=1
+
+  return "$result"
+}
+
+run_module_04_tests() {
+  local _module="$1"
+  local base_dir="$2"
+  local resource_dir="$SCRIPT_DIR/resource/module_04"
+  local sample_file="$resource_dir/ancient_fragment.txt"
+  local result=0
+
+  if [ ! -f "$sample_file" ]; then
+    printf '[ERROR] module 04 테스트 리소스 파일이 없습니다: %s\n' "$sample_file"
+    return 1
+  fi
+
+  printf '\n[INFO] module 04 파일 입출력 테스트\n'
+
+  run_entry_file_with_args "$base_dir/ex0" "ft_ancient_text.py" || result=1
+  run_entry_file_with_args "$base_dir/ex0" "ft_ancient_text.py" "foo" || result=1
+  run_entry_file_with_args "$base_dir/ex0" "ft_ancient_text.py" "$sample_file" || result=1
+
+  printf '\n[RUN] ex1/ft_archive_creation.py - 저장하지 않는 케이스\n'
+  (
+    cd "$base_dir/ex1" || exit 1
+    printf '\n' | python3 ft_archive_creation.py "$sample_file"
+  ) || result=1
+
+  printf '\n[RUN] ex1/ft_archive_creation.py - 새 파일 저장 케이스\n'
+  (
+    cd "$base_dir/ex1" || exit 1
+    rm -f new_fragment.txt
+    printf 'new_fragment.txt\n' | python3 ft_archive_creation.py "$sample_file"
+    rm -f new_fragment.txt
+  ) || result=1
+
+  run_entry_file_with_args "$base_dir/ex2" "ft_stream_management.py" "foo" || result=1
+
+  printf '\n[RUN] ex2/ft_stream_management.py - 저장 권한 에러 케이스\n'
+  (
+    cd "$base_dir/ex2" || exit 1
+    printf '/etc/passwd\n' | python3 ft_stream_management.py "$sample_file"
+  ) || result=1
+
+  run_entry_file_with_args "$base_dir/ex3" "ft_vault_security.py" || result=1
+
+  return "$result"
+}
+
+run_module_05_tests() {
+  local module="$1"
+  local base_dir="$2"
+  local result=0
+
+  run_generic_module_tests "$module" "$base_dir" || result=1
+  ask_remove_generated_files "$module" "$base_dir"
+
+  return "$result"
+}
+
+run_module_06_tests() {
+  local _module="$1"
+  local base_dir="$2"
+  local result=0
+
+  printf '\n[INFO] module 06 패키지형 테스트\n'
+
+  run_entry_file "$base_dir" "ft_alembic_0.py" || result=1
+  run_entry_file "$base_dir" "ft_alembic_1.py" || result=1
+  run_entry_file "$base_dir" "ft_alembic_2.py" || result=1
+  run_entry_file "$base_dir" "ft_alembic_3.py" || result=1
+  run_entry_file "$base_dir" "ft_alembic_4.py" || result=1
+  run_entry_file "$base_dir" "ft_alembic_5.py" || result=1
+  run_entry_file "$base_dir" "ft_distillation_0.py" || result=1
+  run_entry_file "$base_dir" "ft_distillation_1.py" || result=1
+  run_entry_file "$base_dir" "ft_kaboom_0.py" || result=1
+  run_entry_file "$base_dir" "ft_kaboom_1.py" || result=1
+  run_entry_file "$base_dir" "ft_transmutation_0.py" || result=1
+  run_entry_file "$base_dir" "ft_transmutation_1.py" || result=1
+  run_entry_file "$base_dir" "ft_transmutation_2.py" || result=1
+
+  return "$result"
+}
+
+run_module_07_tests() {
+  local _module="$1"
+  local base_dir="$2"
+  local result=0
+
+  printf '\n[INFO] module 07 패키지형 테스트\n'
+
+  run_entry_file "$base_dir" "battle.py" || result=1
+  run_entry_file "$base_dir" "capacitor.py" || result=1
+  run_entry_file "$base_dir" "tournament.py" || result=1
+
+  return "$result"
+}
+
+run_module_08_tests() {
+  local _module="$1"
+  local base_dir="$2"
+  local result=0
+
+  printf '\n[INFO] module 08 환경/패키지/config 테스트\n'
+
+  ensure_python_package_or_exit "pandas" "pandas" || return 1
+  ensure_python_package_or_exit "numpy" "numpy" || return 1
+  ensure_python_package_or_exit "matplotlib" "matplotlib" || return 1
+  ensure_python_package_or_exit "dotenv" "python-dotenv" || return 1
+
+  run_entry_file "$base_dir/ex0" "construct.py" || result=1
+  run_entry_file "$base_dir/ex1" "loading.py" || result=1
+
+  if [ ! -f "$base_dir/ex2/.env" ]; then
+    printf '\n[WARN] ex2/.env 파일이 없습니다. oracle.py 기본 동작만 확인합니다.\n'
+  fi
+
+  run_entry_file "$base_dir/ex2" "oracle.py" || result=1
+
+  printf '\n[TEST] 환경변수 override 실행\n'
+  (
+    cd "$base_dir/ex2" || exit 1
+    MATRIX_MODE=production API_KEY=secret123 python3 oracle.py
+  ) || result=1
+
+  ask_remove_generated_files "$_module" "$base_dir"
+
+  return "$result"
+}
+
+
+
+run_module_09_tests() {
+  local _module="$1"
+  local base_dir="$2"
+  local resource_dir="$SCRIPT_DIR/resource/module_09"
+  local result=0
+
+  ensure_python_package_or_exit "pydantic" "pydantic>=2" || return 1
+
+  if [ ! -f "$resource_dir/data_generator.py" ] ||
+     [ ! -f "$resource_dir/data_exporter.py" ]; then
+    printf '[ERROR] module 09 리소스 파일이 없습니다.\n'
+    return 1
+  fi
+
+  cp "$resource_dir/data_generator.py" "$base_dir/data_generator.py"
+  cp "$resource_dir/data_exporter.py" "$base_dir/data_exporter.py"
+
+  run_entry_file "$base_dir" "data_generator.py" || result=1
+  run_entry_file "$base_dir" "data_exporter.py" || result=1
+
+  run_entry_file "$base_dir/ex0" "space_station.py" || result=1
+  run_entry_file "$base_dir/ex1" "alien_contact.py" || result=1
+  run_entry_file "$base_dir/ex2" "space_crew.py" || result=1
+
+  rm -f "$base_dir/data_generator.py"
+  rm -f "$base_dir/data_exporter.py"
+
+  ask_remove_generated_files "$_module" "$base_dir"
+
+  return "$result"
+}
+
+run_module_10_tests() {
+  local _module="$1"
+  local base_dir="$2"
+  local resource_dir="$SCRIPT_DIR/resource/module_10"
+  local generator_src="$resource_dir/data_generator.py"
+  local generator_dst="$base_dir/data_generator.py"
+  local result=0
+
+  printf '\n[INFO] module 10 functional programming 테스트\n'
+
+  if [ -f "$generator_src" ]; then
+    cp "$generator_src" "$generator_dst"
+    printf '\n[TEST] data_generator.py 전체 샘플 출력\n'
+    (
+      cd "$base_dir" || exit 1
+      printf '5\nq\n' | python3 data_generator.py
+    ) || result=1
+    rm -f "$generator_dst"
+  else
+    printf '[WARN] module 10 data_generator.py 리소스가 없습니다: %s\n' "$generator_src"
+  fi
+
+  run_entry_file "$base_dir/ex0" "lambda_spells.py" || result=1
+  run_entry_file "$base_dir/ex1" "higher_magic.py" || result=1
+  run_entry_file "$base_dir/ex2" "scope_mysteries.py" || result=1
+  run_entry_file "$base_dir/ex3" "functools_artifacts.py" || result=1
+  run_entry_file "$base_dir/ex4" "decorator_mastery.py" || result=1
+
+  return "$result"
 }
 
 # ==============================
@@ -616,7 +1005,12 @@ run_tests_for_module() {
     fi
   fi
 
-  run_module_test_by_mapping "$module" "$base_dir"
+  if ! run_module_test_by_mapping "$module" "$base_dir"; then
+    remove_mypy_cache "$base_dir"
+    remove_pycache "$base_dir"
+    printf '\n[WARN] 실행 테스트 중 실패가 감지되었습니다: python module %s\n' "$module"
+    return 1
+  fi
 
   remove_mypy_cache "$base_dir"
   remove_pycache "$base_dir"
