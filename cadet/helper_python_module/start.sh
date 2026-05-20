@@ -187,20 +187,6 @@ MODULE_08_TESTER="run_module_08_tests"
 MODULE_09_TESTER="run_module_09_tests"
 MODULE_10_TESTER="run_module_10_tests"
 
-# ==============================
-# 모듈별 요구 패키지
-# ==============================
-
-MODULE_08_REQUIRED_PACKAGES=(
-  "pandas:pandas"
-  "numpy:numpy"
-  "matplotlib:matplotlib"
-  "dotenv:python-dotenv"
-)
-
-MODULE_09_REQUIRED_PACKAGES=(
-  "pydantic:pydantic>=2"
-)
 
 # ==============================
 # 모듈별 테스트 산출물 삭제 대상
@@ -281,57 +267,6 @@ print_registered_modules_with_names() {
   done
 }
 
-get_module_required_packages_var() {
-  printf 'MODULE_%s_REQUIRED_PACKAGES' "$1"
-}
-
-get_module_required_packages() {
-  local var_name
-
-  var_name="$(get_module_required_packages_var "$1")"
-  eval 'printf "%s\n" "${'"$var_name"'[@]:-}"'
-}
-
-ask_install_required_packages_for_module() {
-  local module="$1"
-  local packages
-  local answer
-  local pair
-  local package_name
-
-  packages="$(get_module_required_packages "$module")"
-
-  if [ -z "$packages" ]; then
-    return 0
-  fi
-
-  printf "\n${TAG_INFO} module %s는 외부 라이브러리 설치를 요구하는 과제입니다.\n" "$module"
-  printf '필요 패키지:\n'
-
-  while IFS= read -r pair; do
-    [ -z "$pair" ] && continue
-    package_name="${pair#*:}"
-    printf '%s\n' "- $package_name"
-  done <<< "$packages"
-
-  printf '설치하시겠습니까? [y/N] '
-  read -r answer
-
-  case "$answer" in
-    y|Y|yes|YES)
-      while IFS= read -r pair; do
-        [ -z "$pair" ] && continue
-        package_name="${pair#*:}"
-        python3 -m pip install --user "$package_name"
-      done <<< "$packages"
-      export PATH="$HOME/.local/bin:$PATH"
-      printf "${TAG_DONE} module %s 필요 패키지 설치 완료\n" "$module"
-      ;;
-    *)
-      printf "${TAG_SKIP} 패키지 설치를 건너뜁니다.\n"
-      ;;
-  esac
-}
 
 # ==============================
 # 디렉토리/파일 생성
@@ -367,7 +302,6 @@ create_module_structure() {
   done < <(get_module_files "$module")
 
   printf "\n${TAG_DONE} python module %s 생성 완료\n" "$module"
-  ask_install_required_packages_for_module "$module"
 }
 
 select_create_modules() {
@@ -662,33 +596,50 @@ ask_remove_generated_files() {
   esac
 }
 
-ensure_python_package_or_exit() {
-  local import_name="$1"
-  local package_name="$2"
-  local answer
 
-  if python3 -c "import ${import_name}" >/dev/null 2>&1; then
-    return 0
+run_in_venv() {
+  local base_dir="$1"
+  shift
+
+  if [ ! -f "$base_dir/.venv/bin/activate" ]; then
+    printf "${TAG_WARN} .venv가 없습니다: %s/.venv
+" "$base_dir"
+    printf '먼저 생성 및 패키지 설치를 진행하세요:
+'
+    printf '  cd "%s"
+' "$base_dir"
+    printf '  python3 -m venv .venv
+'
+    printf '  source .venv/bin/activate
+'
+    printf '  pip install -r requirements.txt 또는 필요한 패키지 설치
+'
+    return 1
   fi
 
-  printf "\n${TAG_WARN} %s 패키지가 설치되어 있지 않습니다.\n" "$package_name"
-  printf '1. pip install --user %s 로 설치\n' "$package_name"
-  printf '2. 종료\n'
-  printf '> '
-  read -r answer
+  (
+    cd "$base_dir" || exit 1
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+    "$@"
+    deactivate
+  )
+}
 
-  case "$answer" in
-    1)
-      python3 -m pip install --user "$package_name"
-      python3 -c "import ${import_name}" >/dev/null 2>&1 || {
-        printf "${TAG_ERROR} 설치 후에도 %s import에 실패했습니다.\n" "$import_name"
-        return 1
-      }
-      ;;
-    *)
-      exit 0
-      ;;
-  esac
+run_venv_file() {
+  local base_dir="$1"
+  local file_path="$2"
+
+  if [ ! -f "$base_dir/$file_path" ]; then
+    printf "${TAG_WARN} 진입점 파일 없음: %s/%s
+" "$base_dir" "$file_path"
+    return 1
+  fi
+
+  printf "
+${TAG_RUN} %s/.venv - python3 %s
+" "$base_dir" "$file_path"
+  run_in_venv "$base_dir" python3 "$file_path"
 }
 
 run_module_test_by_mapping() {
@@ -906,33 +857,35 @@ run_module_08_tests() {
   local base_dir="$2"
   local result=0
 
-  printf "\n${TAG_INFO} module 08 환경/패키지/config 테스트\n"
+  printf "
+${TAG_INFO} module 08 .venv 환경 실행 테스트
+"
 
-  ensure_python_package_or_exit "pandas" "pandas" || return 1
-  ensure_python_package_or_exit "numpy" "numpy" || return 1
-  ensure_python_package_or_exit "matplotlib" "matplotlib" || return 1
-  ensure_python_package_or_exit "dotenv" "python-dotenv" || return 1
-
-  run_entry_file "$base_dir/ex0" "construct.py" || result=1
-  run_entry_file "$base_dir/ex1" "loading.py" || result=1
-
-  if [ ! -f "$base_dir/ex2/.env" ]; then
-    printf "\n${TAG_WARN} ex2/.env 파일이 없습니다. oracle.py 기본 동작만 확인합니다.\n"
+  if [ ! -f "$base_dir/.venv/bin/activate" ]; then
+    run_in_venv "$base_dir" true
+    return 1
   fi
 
-  run_entry_file "$base_dir/ex2" "oracle.py" || result=1
+  run_venv_file "$base_dir" "ex0/construct.py" || result=1
+  run_venv_file "$base_dir" "ex1/loading.py" || result=1
 
-  printf "\n${TAG_TEST} 환경변수 override 실행\n"
-  (
-    cd "$base_dir/ex2" || exit 1
-    MATRIX_MODE=production API_KEY=secret123 python3 oracle.py
-  ) || result=1
+  if [ ! -f "$base_dir/ex2/.env" ]; then
+    printf "
+${TAG_WARN} ex2/.env 파일이 없습니다. oracle.py 기본 동작만 확인합니다.
+"
+  fi
+
+  run_venv_file "$base_dir" "ex2/oracle.py" || result=1
+
+  printf "
+${TAG_TEST} .venv 환경변수 override 실행
+"
+  run_in_venv "$base_dir" env MATRIX_MODE=production API_KEY=secret123 python3 ex2/oracle.py || result=1
 
   ask_remove_generated_files "$_module" "$base_dir"
 
   return "$result"
 }
-
 
 
 run_module_09_tests() {
@@ -941,23 +894,31 @@ run_module_09_tests() {
   local resource_dir="$SCRIPT_DIR/resource/module_09"
   local result=0
 
-  ensure_python_package_or_exit "pydantic" "pydantic>=2" || return 1
+  printf "
+${TAG_INFO} module 09 .venv 환경 Pydantic 테스트
+"
+
+  if [ ! -f "$base_dir/.venv/bin/activate" ]; then
+    run_in_venv "$base_dir" true
+    return 1
+  fi
 
   if [ ! -f "$resource_dir/data_generator.py" ] ||
      [ ! -f "$resource_dir/data_exporter.py" ]; then
-    printf "${TAG_ERROR} module 09 리소스 파일이 없습니다.\n"
+    printf "${TAG_ERROR} module 09 리소스 파일이 없습니다.
+"
     return 1
   fi
 
   cp "$resource_dir/data_generator.py" "$base_dir/data_generator.py"
   cp "$resource_dir/data_exporter.py" "$base_dir/data_exporter.py"
 
-  run_entry_file "$base_dir" "data_generator.py" || result=1
-  run_entry_file "$base_dir" "data_exporter.py" || result=1
+  run_venv_file "$base_dir" "data_generator.py" || result=1
+  run_venv_file "$base_dir" "data_exporter.py" || result=1
 
-  run_entry_file "$base_dir/ex0" "space_station.py" || result=1
-  run_entry_file "$base_dir/ex1" "alien_contact.py" || result=1
-  run_entry_file "$base_dir/ex2" "space_crew.py" || result=1
+  run_venv_file "$base_dir" "ex0/space_station.py" || result=1
+  run_venv_file "$base_dir" "ex1/alien_contact.py" || result=1
+  run_venv_file "$base_dir" "ex2/space_crew.py" || result=1
 
   rm -f "$base_dir/data_generator.py"
   rm -f "$base_dir/data_exporter.py"
@@ -1030,7 +991,7 @@ run_tests_for_module() {
   if ! run_module_test_by_mapping "$module" "$base_dir"; then
     remove_mypy_cache "$base_dir"
     remove_pycache "$base_dir"
-    printf "\n${TAG_WARN} 실행 테스트 중 실패가 감지되었습니다: python module %s\n" "$module"
+    printf "\n${TAG_STOP} 실행 테스트 중 실패가 감지되었습니다: python module %s\n" "$module"
     return 1
   fi
 
