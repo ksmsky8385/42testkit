@@ -507,6 +507,17 @@ handle_static_check_error() {
 # 테스트 실행 함수 모음
 # ==============================
 
+should_skip_empty_file() {
+  local file_path="$1"
+
+  if [ ! -s "$file_path" ]; then
+    printf "\n${TAG_SKIP} 빈 파일: %s\n" "$file_path"
+    return 0
+  fi
+
+  return 1
+}
+
 run_entry_file() {
   local run_dir="$1"
   local file_name="$2"
@@ -514,6 +525,10 @@ run_entry_file() {
   if [ ! -f "$run_dir/$file_name" ]; then
     printf "${TAG_WARN} 진입점 파일 없음: %s/%s\n" "$run_dir" "$file_name"
     return 1
+  fi
+
+  if should_skip_empty_file "$run_dir/$file_name"; then
+    return 0
   fi
 
   printf "\n${TAG_RUN} %s - python3 %s\n" "$run_dir" "$file_name"
@@ -528,6 +543,10 @@ run_entry_file_with_args() {
   if [ ! -f "$run_dir/$file_name" ]; then
     printf "${TAG_WARN} 진입점 파일 없음: %s/%s\n" "$run_dir" "$file_name"
     return 1
+  fi
+
+  if should_skip_empty_file "$run_dir/$file_name"; then
+    return 0
   fi
 
   printf "\n${TAG_RUN} %s - python3 %s" "$run_dir" "$file_name"
@@ -636,6 +655,10 @@ run_venv_file() {
     return 1
   fi
 
+  if should_skip_empty_file "$base_dir/$file_path"; then
+    return 0
+  fi
+
   printf "
 ${TAG_RUN} %s/.venv - python3 %s
 " "$base_dir" "$file_path"
@@ -689,6 +712,10 @@ run_generic_ex_file_tests() {
       continue
     fi
 
+    if should_skip_empty_file "$file_path"; then
+      continue
+    fi
+
     run_dir="$(dirname "$file_path")"
     file_name="$(basename "$file_path")"
 
@@ -711,6 +738,10 @@ run_module_00_tests() {
   if [ ! -f "$helper_main" ]; then
     printf "\n${TAG_ERROR} helper main.py가 없습니다: %s\n" "$helper_main"
     return 1
+  fi
+
+  if should_skip_empty_file "$helper_main"; then
+    return 0
   fi
 
   cp "$helper_main" "$base_dir/main.py"
@@ -741,11 +772,13 @@ run_module_03_tests() {
   run_entry_file_with_args "$base_dir/ex1" "ft_score_analytics.py" || result=1
   run_entry_file_with_args "$base_dir/ex1" "ft_score_analytics.py" ab ac || result=1
 
-  printf "\n${TAG_RUN} ex2/ft_coordinate_system.py - input pipe test\n"
-  (
-    cd "$base_dir/ex2" || exit 1
-    printf 'hello world\n1.0 , 2.5, 3.0\n4,abc,5\n4,5,6\n' | python3 ft_coordinate_system.py
-  ) || result=1
+  if ! should_skip_empty_file "$base_dir/ex2/ft_coordinate_system.py"; then
+    printf "\n${TAG_RUN} ex2/ft_coordinate_system.py - input pipe test\n"
+    (
+      cd "$base_dir/ex2" || exit 1
+      printf 'hello world\n1.0 , 2.5, 3.0\n4,abc,5\n4,5,6\n' | python3 ft_coordinate_system.py
+    ) || result=1
+  fi
 
   run_entry_file_with_args "$base_dir/ex3" "ft_achievement_tracker.py" || result=1
 
@@ -776,27 +809,31 @@ run_module_04_tests() {
   run_entry_file_with_args "$base_dir/ex0" "ft_ancient_text.py" "foo" || result=1
   run_entry_file_with_args "$base_dir/ex0" "ft_ancient_text.py" "$sample_file" || result=1
 
-  printf "\n${TAG_RUN} ex1/ft_archive_creation.py - 저장하지 않는 케이스\n"
-  (
-    cd "$base_dir/ex1" || exit 1
-    printf '\n' | python3 ft_archive_creation.py "$sample_file"
-  ) || result=1
+  if ! should_skip_empty_file "$base_dir/ex1/ft_archive_creation.py"; then
+    printf "\n${TAG_RUN} ex1/ft_archive_creation.py - 저장하지 않는 케이스\n"
+    (
+      cd "$base_dir/ex1" || exit 1
+      printf '\n' | python3 ft_archive_creation.py "$sample_file"
+    ) || result=1
 
-  printf "\n${TAG_RUN} ex1/ft_archive_creation.py - 새 파일 저장 케이스\n"
-  (
-    cd "$base_dir/ex1" || exit 1
-    rm -f new_fragment.txt
-    printf 'new_fragment.txt\n' | python3 ft_archive_creation.py "$sample_file"
-    rm -f new_fragment.txt
-  ) || result=1
+    printf "\n${TAG_RUN} ex1/ft_archive_creation.py - 새 파일 저장 케이스\n"
+    (
+      cd "$base_dir/ex1" || exit 1
+      rm -f new_fragment.txt
+      printf 'new_fragment.txt\n' | python3 ft_archive_creation.py "$sample_file"
+      rm -f new_fragment.txt
+    ) || result=1
+  fi
 
   run_entry_file_with_args "$base_dir/ex2" "ft_stream_management.py" "foo" || result=1
 
-  printf "\n${TAG_RUN} ex2/ft_stream_management.py - 저장 권한 에러 케이스\n"
-  (
-    cd "$base_dir/ex2" || exit 1
-    printf '/etc/passwd\n' | python3 ft_stream_management.py "$sample_file"
-  ) || result=1
+  if ! should_skip_empty_file "$base_dir/ex2/ft_stream_management.py"; then
+    printf "\n${TAG_RUN} ex2/ft_stream_management.py - 저장 권한 에러 케이스\n"
+    (
+      cd "$base_dir/ex2" || exit 1
+      printf '/etc/passwd\n' | python3 ft_stream_management.py "$sample_file"
+    ) || result=1
+  fi
 
   run_entry_file_with_args "$base_dir/ex3" "ft_vault_security.py" || result=1
 
@@ -877,10 +914,12 @@ ${TAG_WARN} ex2/.env 파일이 없습니다. oracle.py 기본 동작만 확인�
 
   run_venv_file "$base_dir" "ex2/oracle.py" || result=1
 
-  printf "
+  if ! should_skip_empty_file "$base_dir/ex2/oracle.py"; then
+    printf "
 ${TAG_TEST} .venv 환경변수 override 실행
 "
-  run_in_venv "$base_dir" env MATRIX_MODE=production API_KEY=secret123 python3 ex2/oracle.py || result=1
+    run_in_venv "$base_dir" env MATRIX_MODE=production API_KEY=secret123 python3 ex2/oracle.py || result=1
+  fi
 
   ask_remove_generated_files "$_module" "$base_dir"
 
@@ -939,13 +978,17 @@ run_module_10_tests() {
   printf "\n${TAG_INFO} module 10 functional programming 테스트\n"
 
   if [ -f "$generator_src" ]; then
-    cp "$generator_src" "$generator_dst"
-    printf "\n${TAG_TEST} data_generator.py 전체 샘플 출력\n"
-    (
-      cd "$base_dir" || exit 1
-      printf '5\nq\n' | python3 data_generator.py
-    ) || result=1
-    rm -f "$generator_dst"
+    if should_skip_empty_file "$generator_src"; then
+      :
+    else
+      cp "$generator_src" "$generator_dst"
+      printf "\n${TAG_TEST} data_generator.py 전체 샘플 출력\n"
+      (
+        cd "$base_dir" || exit 1
+        printf '5\nq\n' | python3 data_generator.py
+      ) || result=1
+      rm -f "$generator_dst"
+    fi
   else
     printf "${TAG_WARN} module 10 data_generator.py 리소스가 없습니다: %s\n" "$generator_src"
   fi
@@ -991,7 +1034,7 @@ run_tests_for_module() {
   if ! run_module_test_by_mapping "$module" "$base_dir"; then
     remove_mypy_cache "$base_dir"
     remove_pycache "$base_dir"
-    printf "\n${TAG_STOP} 실행 테스트 중 실패가 감지되었습니다: python module %s\n" "$module"
+    printf "\n${TAG_WARN} 실행 테스트 중 실패가 감지되었습니다: python module %s\n" "$module"
     return 1
   fi
 
